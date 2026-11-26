@@ -16,7 +16,7 @@ except ImportError:  # pragma: no cover - depends on the user's machine
 try:
     from tkinterdnd2 import DND_FILES, TkinterDnD
     HAS_DND = True
-except ImportError:  # pragma: no cover
+except Exception:  # pragma: no cover - missing, or a tkdnd that doesn't match this Tk: run without drag & drop
     DND_FILES = TkinterDnD = None
     HAS_DND = False
 

@@ -13,11 +13,12 @@ What's stored per item (``queue`` column, JSON):
 * ``values``, ``price``, ``sku``;
 * ``photos`` - **copies** in ``queued_photos/item_<id>/``, so moving or deleting the originals
   doesn't matter;
-* ``template_id`` plus a ``template`` snapshot.
+* ``template_id`` plus a ``template`` snapshot;
+* ``overrides`` - settings changed for this item on the List Item form (package size, condition...).
 
 At batch time the item uses its template **as it is then** (category, condition, package size,
-policies, location), so you can finish a template's eBay settings after queueing. The snapshot is
-only used if the template has since been deleted.
+policies, location), so you can finish a template's eBay settings after queueing, with the item's
+own ``overrides`` on top. The snapshot is only used if the template has since been deleted.
 
 Batch rules (:class:`BatchLister`): nothing is attempted while eBay isn't connected; items that sold
 in the meantime are skipped and taken out of the queue; failures stay queued with the error shown
@@ -59,7 +60,7 @@ class ListingQueue:
         """Queue ``job`` on database row ``item_id``. Photos are copied."""
         data = {"rendered": dict(job.rendered), "values": dict(job.values), "price": job.price, "sku": job.sku,
                 "photos": self._copy_photos(item_id, job.photos), "template_id": job.template.get("id"),
-                "template": job.template}
+                "template": job.template, "overrides": dict(job.overrides)}
         self.db.update(item_id, queue=json.dumps(data), queued_at=time.time(), queue_error=None, status="queued")
 
     @staticmethod
@@ -112,7 +113,8 @@ class ListingQueue:
         data = self.data(item)
         template = (templates.get(data.get("template_id")) if templates else None) or data.get("template") or {}
         return ListingJob(template=template, rendered=data["rendered"], price=data.get("price", ""),
-                          photos=data.get("photos", []), sku=data.get("sku", ""), values=data.get("values", {}))
+                          photos=data.get("photos", []), sku=data.get("sku", ""), values=data.get("values", {}),
+                          overrides=data.get("overrides") or {})
 
     # ---- photos
     def _folder(self, item_id):
@@ -149,7 +151,7 @@ class BatchLister:
     @staticmethod
     def problems(job: ListingJob):
         """Everything that would make this item fail, checked before anything is uploaded."""
-        errs = validate_listing(job.template, job.rendered, job.values, job.price, job.photos, job.sku,
+        errs = validate_listing(job.settings, job.rendered, job.values, job.price, job.photos, job.sku,
                                 check_values=False)
         if not job.sku:
             errs.append("missing SKU")

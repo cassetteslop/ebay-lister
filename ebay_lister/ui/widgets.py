@@ -41,8 +41,8 @@ class ScrollFrame(ttk.Frame):
         w = e.widget
         if not isinstance(w, tk.Misc):
             return
-        # let text boxes / lists scroll themselves when they actually have more content
-        if isinstance(w, (tk.Text, tk.Listbox)):
+        # let text boxes / lists / tables scroll themselves when they actually have more content
+        if isinstance(w, (tk.Text, tk.Listbox, ttk.Treeview)):
             try:
                 if tuple(round(x, 3) for x in w.yview()) != (0.0, 1.0):
                     return

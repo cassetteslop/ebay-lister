@@ -11,6 +11,8 @@ python -m unittest discover -s tests -t .     # all tests (unit + headless UI sm
 ruff check .                                  # lint (config in pyproject.toml; tests/fake_tk is excluded)
 python run.py                                 # run the app (needs a display)
 python run.py --self-test                     # import everything + build the window hidden, temp data dir
+python packaging/make_guide.py                # docs/USER_GUIDE.md -> build/guide/*.pdf (needs reportlab)
+packaging/macos/autobuild.sh --working-tree   # build the Mac app and install it in /Applications
 ```
 Set `EBAY_LISTER_HOME=/some/tmp/dir` when running anything that might touch real user data.
 
@@ -27,6 +29,8 @@ Key objects:
 - `services/listing_queue.py`: `ListingQueue` + `BatchLister`. Queued items store **rendered** text plus photo copies; at batch time they use the template's *current* account settings (fallback: the stored snapshot).
 - `services/database.py`: `ItemsDB`; the schema is `ITEM_FIELDS`, and new columns are auto-migrated.
 - `ui/app.py`: `App` is the composition root; tabs reach shared services via `self.app`.
+- `ui/listing_fields.py`: the template-controlled part of the List Item form. `template["list_fields"]` sets each `config.LIST_FIELDS` key to hidden / show / edit. Hand-edited text goes into `rendered`; changed settings become `ListingJob.overrides` (only `config.OVERRIDABLE` keys), stored with queued items and applied over the template's *current* settings (`ListingJob.settings`).
+- `ui/aspects_dialog.py`: item specifics picker over `EbayClient.item_aspects()`; merges with `core.text.merge_aspects`.
 
 ## Conventions
 - Validation functions return `list[str]` of user-facing errors and never raise. Template checks are split into **content** (text and variables), **settings** (quantity, package) and **account** (category, policies, location). Account checks are skipped when queueing (`account=False`), and batch validation skips the variable checks (`check_values=False`).
@@ -47,4 +51,7 @@ Key objects:
 - In PyInstaller builds, modules that are only imported dynamically need `hiddenimports` in `packaging/windows/ebay_lister.spec`. The CI self-test fails the build if something is missing.
 - Windowed builds have `sys.stdout is None`. `ui.app.main()` redirects output to `app.log` when frozen; `selftest.py` writes to a file.
 - `EbayClient` keeps tokens in the shared settings dict and calls `save_settings()` on refresh.
+- **User guide:** `docs/USER_GUIDE.md` is rendered to PDF by both PyInstaller specs and bundled as `docs/<config.GUIDE_PDF>` (Help › User Guide); it's also copied next to the exe / into the DMG. Keep it in step with UI changes, written for a non-developer seller. Helvetica only covers Windows-1252, so no other characters (a test checks).
+- **Mac auto-build:** `.githooks/post-commit` (enabled by `packaging/macos/enable_autobuild.sh`) runs `packaging/macos/autobuild.sh` in the background after each commit: builds HEAD, self-tests, installs to /Applications.
+- Trading cards (category 183454) need `card_condition` (eBay condition descriptor 40001); see `config.CARD_CONDITIONS`.
 - The version lives in `ebay_lister/__init__.py` (`__version__`) and `pyproject.toml`; bump both before tagging `v*`.

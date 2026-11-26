@@ -1,23 +1,26 @@
 """List Item tab: one eBay listing built from a chosen template.
 
 Pick a template from the drop-down, add photos, fill in the template's variables (one text box per
-variable) plus SKU and price, check the live preview, and click Create - which adds the item to the
-queue (default) or lists it right away (see :class:`~ebay_lister.ui.listing_runner.ListingModeSelector`).
+variable) plus SKU and price, check or adjust the listing fields (which ones appear, and whether they
+can be changed, is set per template - see :mod:`ebay_lister.ui.listing_fields`), and click Create -
+which adds the item to the queue (default) or lists it right away
+(see :class:`~ebay_lister.ui.listing_runner.ListingModeSelector`).
 """
 
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from ebay_lister.config import APP_NAME, MAX_TITLE_LEN
+from ebay_lister.config import APP_NAME
 from ebay_lister.core import variables as V
 from ebay_lister.core.text import make_sku
 from ebay_lister.core.validation import validate_listing, validate_title
-from ebay_lister.services.listing import ListingJob
+from ebay_lister.services.listing import ListingJob, apply_overrides
+from ebay_lister.ui.listing_fields import ListingFields
 from ebay_lister.ui.listing_runner import ListingModeSelector, run_listing_job
 from ebay_lister.ui.photo_strip import PhotoStrip
 from ebay_lister.ui.tabs.base import BaseTab
 from ebay_lister.ui.theme import P
-from ebay_lister.ui.widgets import Choice, FormGrid, TextLabel, make_text, text_get, text_set
+from ebay_lister.ui.widgets import Choice, FormGrid, make_text, text_get, text_set
 
 
 class VariableInputs(ttk.Frame):
@@ -118,20 +121,10 @@ class ListItemTab(BaseTab):
         self.vars_frame = VariableInputs(b, on_change=self.update_preview)
         row("Variables", self.vars_frame, sticky="we")
 
-        # ---- preview
-        hdr("Preview", "what will be listed")
-        self.title_preview = tk.Label(b, text="", anchor="w", justify="left", bg=P.readonly_bg, fg=P.fg, relief="flat",
-                                      bd=0, highlightthickness=1, highlightbackground=P.border, padx=8, pady=4,
-                                      wraplength=900, font=("TkDefaultFont", 11, "bold"))
-        row("Title", self.title_preview, sticky="we")
-        self.title_count = TextLabel(b, text="")
-        form.full(self.title_count, column=1, columnspan=1, sticky="w")
-        self.previews = {}
-        for key, label, height in (("description", "Description", 9), ("condition_description", "Condition notes", 3),
-                                   ("aspects", "Item specifics", 4)):
-            frame, box = make_text(b, height=height, readonly=True)
-            self.previews[key] = box
-            row(label, frame, sticky="we")
+        # ---- the listing: fields chosen by the template (hidden / shown / editable)
+        hdr("Listing", "from the template, with your variables filled in")
+        self.fields = ListingFields(b, app, on_change=self.update_preview)
+        form.full(self.fields)
 
         # ---- create
         hdr("List it")
@@ -181,6 +174,7 @@ class ListItemTab(BaseTab):
         self.photos.skipped_slots = set()
         self.photos.set_pinned(template.get("fixed_photos"))
         self.vars_frame.build(template)
+        self.fields.build(template)
         n = len(template.get("variables", []))
         self.template_info.configure(text=f"{n} variable{'s' if n != 1 else ''} · "
                                           f"category {template.get('category_name') or template.get('category_id') or '—'}")
@@ -195,22 +189,28 @@ class ListItemTab(BaseTab):
     def values(self):
         return self.vars_frame.values()
 
-    def rendered(self):
+    def template_text(self):
+        """The template's text with the variables filled in (before any hand edits)."""
         return V.render_listing(self.template or {}, self.values())
+
+    def rendered(self):
+        """What will be listed: the template's text plus this item's edits."""
+        return self.fields.final(self.template_text())
+
+    def settings(self):
+        """The template's settings with this item's changes (package, condition...) applied."""
+        return apply_overrides(self.template, self.fields.overrides())
 
     def update_preview(self):
         if not self.template:
             return
-        r = self.rendered()
-        self.title_preview.configure(text=r["title"] or " ")
-        errs = validate_title(r["title"])
-        left = V.placeholders(r["title"])
+        self.fields.refresh(self.template_text())
+        title = self.rendered()["title"]
+        errs = validate_title(title)
+        left = V.placeholders(title)
         if left:
             errs.insert(0, "unknown variable " + ", ".join("{" + n + "}" for n in left))
-        self.title_count.configure(text=f"{len(r['title'])}/{MAX_TITLE_LEN} characters"
-                                        + (f"   ⚠ {errs[0]}" if errs else "   ✔"), fg=P.bad if errs else P.ok)
-        for key, box in self.previews.items():
-            text_set(box, r.get(key, ""))
+        self.fields.set_title_status(self.fields.title_limit_text(title, errs), not errs)
 
     def update_submit_label(self):
         self.mode.refresh()
@@ -221,8 +221,10 @@ class ListItemTab(BaseTab):
 
     # ---- validate / submit
     def _errors(self):
-        errs = validate_listing(self.template, self.rendered(), self.values(), self.price.get(), self.photos.ordered(),
-                                self.sku.get().strip(), account=not self.mode.queue())
+        # a title changed by hand doesn't need the title's variables any more
+        errs = validate_listing(self.settings(), self.rendered(), self.values(), self.price.get(), self.photos.ordered(),
+                                self.sku.get().strip(), account=not self.mode.queue(),
+                                check_values=not self.fields.edited("title"))
         errs += [f"Template photo not found: {p} (fix it on the Templates tab, or ✕ it for this listing)"
                  for p in self.photos.missing_pins()]
         return errs
@@ -242,7 +244,8 @@ class ListItemTab(BaseTab):
             messagebox.showwarning(APP_NAME, "Fix these before listing:\n\n• " + "\n• ".join(errs))
             return
         job = ListingJob(template=dict(self.template), rendered=self.rendered(), price=self.price.get().strip(),
-                         photos=self.photos.ordered(), sku=self.sku.get().strip(), values=self.values())
+                         photos=self.photos.ordered(), sku=self.sku.get().strip(), values=self.values(),
+                         overrides=self.fields.overrides())
         queue = self.mode.queue()
 
         def after():
@@ -260,4 +263,5 @@ class ListItemTab(BaseTab):
         self.photos.clear()
         if self.template:
             self.vars_frame.reset(self.template)
+            self.fields.build(self.template)
         self.update_preview()

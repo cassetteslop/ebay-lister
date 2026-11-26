@@ -139,7 +139,7 @@ def validate_listing(tpl, rendered, values, price, photos, sku, account=True, ch
         errs.append(f"SKU is {len(sku)} characters (eBay's maximum is {MAX_SKU_LEN}).")
     # template problems, de-duplicated (only the account part for queued items: their text is final)
     template_errs = (validate_template(tpl, account=account) if check_values
-                     else validate_template_settings(tpl) + validate_template_account(tpl))
+                     else validate_template_settings(tpl) + (validate_template_account(tpl) if account else []))
     for e in template_errs:
         if e not in errs:
             errs.append(e)

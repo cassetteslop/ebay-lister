@@ -1,0 +1,11 @@
+#!/bin/sh
+# After every commit on a Mac: build "Ebay Lister.app" from the new commit in the background and
+# install it in /Applications. Turned on by packaging/macos/enable_autobuild.sh.
+# Skip once with:  EBAY_LISTER_NO_AUTOBUILD=1 git commit ...
+[ "$(uname)" = "Darwin" ] || exit 0
+[ "${EBAY_LISTER_NO_AUTOBUILD:-0}" = "1" ] && exit 0
+ROOT="$(git rev-parse --show-toplevel)"
+nohup "$ROOT/packaging/macos/autobuild.sh" >/dev/null 2>&1 &
+echo "Ebay Lister: building the Mac app in the background - you'll get a notification when it's installed."
+echo "             Log: build/autobuild/autobuild.log"
+exit 0

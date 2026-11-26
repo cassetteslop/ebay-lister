@@ -2,10 +2,12 @@
 
 A desktop app (Python + Tkinter) for creating **eBay** listings from reusable, named **templates** with your own **variables**. You can queue listings instantly and bulk-list them later, and it keeps a local database of everything you've listed, with sales tracking.
 
+**New to the app? Read the [User Guide](docs/USER_GUIDE.md).** It's also included as a PDF with every build (Help › User Guide in the app).
+
 | Tab | What it's for |
 |---|---|
-| **List Item** | Pick a template, add photos, fill in the template's variables, SKU and price, check the live preview, and click Create. Create adds the item to the queue (default) or lists it right away. |
-| **Items Database** | Everything listed or queued. Active listings are on top, then the **Queued** section (bulk-list all or just the ones you select), then unpublished, sold and ended items. Mark items sold, record prices, fees and profit, open listings, or sync sales from eBay. |
+| **List Item** | Pick a template, add photos, fill in the template's variables, SKU and price, check or adjust the title, item specifics, package size and whatever else the template puts on the form, and click Create. Create adds the item to the queue (default) or lists it right away. |
+| **Items Database** | Everything listed or queued. Active listings are on top, then the **Queued** section (bulk-list all or just the ones you select), then unpublished, sold and ended items, plus an activity log to follow bulk listing. Mark items sold, record prices, fees and profit, open listings, or sync sales from eBay. |
 | **Templates** | Create, duplicate, rename and delete templates, and edit their variables, text, eBay settings, package size, standard photos and business policies. |
 | **Helpful Links** | Shortcuts to your eBay orders, time away, active listings and developer keys. |
 | **Settings** | eBay API keys, connect/disconnect, publish-or-unpublished, appearance (dark / light / match system). |
@@ -55,7 +57,7 @@ A **template** holds everything that's the same for a kind of item:
 * up to three **standard photos** that appear in every listing at a set position;
 * business policies and ship-from location.
 
-You start with two templates, **Sony Walkman** and **Blank template**.
+You start with three templates: **Patch**, **Pokemon card** (ungraded singles, category 183454, with eBay's required *card condition*) and **Blank template**.
 
 * **New…** creates a template from the defaults.
 * **Duplicate…** creates a new template based on the current one, including its variables and standard photos.
@@ -65,16 +67,20 @@ You start with two templates, **Sony Walkman** and **Blank template**.
 **Variables** are your own fields. Each one becomes a text box on the List Item tab, and its value replaces `{VARIABLE_NAME}` in the title, description, condition notes and item specifics:
 
 ```
-Variables:   MODEL (single line), CONDITION_NOTES (multi-line)
-Title:       Sony Walkman {MODEL} Portable Cassette Player Vintage Tested Working
-Specifics:   Brand: Sony
-             Model: {MODEL}
+Variables:   CARD_NAME, CARD_NUMBER, SET (single line), CONDITION_NOTES (multi-line)
+Title:       Pokemon {CARD_NAME} {CARD_NUMBER} {SET} TCG Card
+Specifics:   Game: Pokemon TCG
+             Card Name: {CARD_NAME}
 ```
 
 * **Names:** letters, digits and `_`, starting with a letter. Names are case-sensitive; UPPER_CASE is recommended. Each variable can have a default value.
 * **Required:** variables used in the **title** must be filled in. Others can be left blank. An item-specifics line whose value ends up empty is skipped.
 * **Insert {NAME} at cursor** types the placeholder where you last clicked. **Renaming** a variable updates every `{OLD}` to `{NEW}`.
 * **Mistakes are flagged:** using `{SOMETHING}` without a matching variable shows up in the title hint and in **Validate**. Write `{{` or `}}` for a literal brace.
+
+**Item specifics suggestions:** *Suggest item specifics from eBay…* (Templates tab) and *Suggest from eBay…* (List Item tab) show eBay's item specifics for the category, required ones first, with the values eBay accepts. This uses the Taxonomy API, so it only needs your App ID and Cert ID.
+
+**List Item form:** each template chooses, per field (title, description, condition notes, item specifics, condition, card condition, package, quantity, Best Offer), whether the List Item tab hides it, shows it read-only, or lets you edit it for one item. Edited text stops following the variables until you click *Reset*. Changed settings (for example a bigger box) are saved with a queued item and applied on top of the template when it's listed.
 
 ## Connecting eBay
 1. At <https://developer.ebay.com/my/keys>, copy the **App ID** and **Cert ID**.

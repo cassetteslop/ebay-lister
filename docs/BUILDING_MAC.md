@@ -12,8 +12,25 @@ open "dist/Ebay Lister.app"
 
 You get:
 
-* `dist/Ebay Lister.app`: the app
-* `dist/Ebay-Lister-1.0.0.dmg`: a disk image that installs by dragging the app onto Applications
+* `dist/Ebay Lister.app`: the app, with the User Guide PDF inside (Help › User Guide)
+* `dist/Ebay-Lister-1.0.0.dmg`: a disk image that installs by dragging the app onto Applications; the User Guide PDF sits next to the app
+
+The guide is `docs/USER_GUIDE.md`, rendered to PDF by `packaging/make_guide.py` during every build (it needs `reportlab`, which is in `requirements-build.txt`).
+
+## Automatic build after every commit
+
+Turn it on once:
+
+```bash
+packaging/macos/enable_autobuild.sh
+```
+
+From then on, every `git commit` starts a build of that commit in the background. When the build passes its self-test, it replaces **/Applications/Ebay Lister.app** and you get a notification. If it fails, you get a notification too. The log is `build/autobuild/autobuild.log`.
+
+* It builds a clean copy of the commit, not your working folder, so uncommitted edits never end up in the app. If commits come in while a build is running, it builds again afterwards with the newest one.
+* Build and install without committing: `packaging/macos/autobuild.sh` (the last commit) or `packaging/macos/autobuild.sh --working-tree` (the folder as it is now).
+* Skip it for one commit: `EBAY_LISTER_NO_AUTOBUILD=1 git commit ...`. Turn it off: `packaging/macos/enable_autobuild.sh --off`.
+* The hook lives in `.githooks/post-commit`; the enable script points `core.hooksPath` at that folder and remembers which Python to build with (`git config ebaylister.python`).
 
 The script creates its own build environment (`.venv-build`), installs PyInstaller, Pillow and tkinterdnd2 into it, runs the tests, then builds. Running it again rebuilds from scratch.
 
@@ -87,6 +104,8 @@ PyInstaller signs the app with the "hardened runtime" Apple requires, using `pac
 ```
 packaging/macos/
 ├── build_mac.sh          one-command build: environment, tests, icon, app, (sign), dmg, (notarize)
+├── autobuild.sh          build the latest commit and install it in /Applications (used by the git hook)
+├── enable_autobuild.sh   turn the after-every-commit build on or off
 ├── EbayLister.spec    PyInstaller recipe: name, icon, bundle id, Info.plist, bundled tkdnd
 ├── entitlements.plist    hardened-runtime exceptions (used only when signing)
 ├── make_icns.sh          icon.png -> EbayLister.icns

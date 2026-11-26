@@ -34,9 +34,12 @@ class BaseTab(ttk.Frame):
     # ---- activity log
     def add_log(self, form, height=8):
         """Add a dark activity-log box as the next full-width row of ``form`` and register it with the app."""
-        frame, self.log_text = make_text(form.parent, height=height, readonly=True, bg=P.log_bg, fg=P.log_fg,
+        return form.full(self.make_log(form.parent, height))
+
+    def make_log(self, parent, height=8):
+        """A dark activity-log box (frame, not yet placed) that receives every ``app.log()`` message."""
+        frame, self.log_text = make_text(parent, height=height, readonly=True, bg=P.log_bg, fg=P.log_fg,
                                          insertbackground=P.log_fg)
-        form.full(frame)
         self.app.register_log(self)
         return frame
 

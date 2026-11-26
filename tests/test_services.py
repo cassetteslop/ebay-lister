@@ -13,7 +13,7 @@ from ebay_lister.services.listing import ListingJob, ListingService
 from ebay_lister.services.listing_queue import BatchLister, ListingQueue
 from ebay_lister.services.sync import SalesSync
 from ebay_lister.services.templates import TemplateError, TemplateStore
-from tests.test_core import walkman_template
+from tests.test_core import WALKMAN, walkman_template
 
 
 class FakeEbay:
@@ -80,19 +80,19 @@ class Base(unittest.TestCase):
 
 class TemplateStoreTests(Base):
     def test_starters_and_persistence(self):
-        self.assertEqual(self.templates.names(), ["Sony Walkman", "Blank template"])
+        self.assertEqual(self.templates.names(), ["Patch", "Pokemon card", "Blank template"])
         reopened = TemplateStore(self.templates.path, photo_dir=self.templates.photo_dir)
         self.assertEqual([t["id"] for t in reopened.all()], [t["id"] for t in self.templates.all()])
 
     def test_create_duplicate_rename_delete(self):
-        base = self.templates.by_name("Sony Walkman")
+        base = self.templates.by_name("Patch")
         copy = self.templates.create(self.templates.unique_name(base["name"]), base_id=base["id"])
-        self.assertEqual(copy["name"], "Sony Walkman (copy)")
+        self.assertEqual(copy["name"], "Patch (copy)")
         self.assertEqual(copy["title"], base["title"])
         self.assertNotEqual(copy["id"], base["id"])
-        self.assertEqual(self.templates.unique_name("Sony Walkman"), "Sony Walkman (copy 2)")
+        self.assertEqual(self.templates.unique_name("Patch"), "Patch (copy 2)")
         with self.assertRaises(TemplateError):
-            self.templates.create("sony walkman")                   # names are unique, case-insensitive
+            self.templates.create("patch")                          # names are unique, case-insensitive
         self.templates.rename(copy["id"], "Discman")
         self.assertIsNotNone(self.templates.by_name("Discman"))
         blank = self.templates.create("Fresh")
@@ -114,8 +114,12 @@ class TemplateStoreTests(Base):
     def test_old_files_get_new_keys(self):
         t = self.templates.first()
         t.pop("best_offer")
+        t["list_fields"] = {"title": "show", "aspects": "bogus"}
         saved = self.templates.save(t)
         self.assertIn("best_offer", saved)
+        self.assertEqual(saved["list_fields"]["title"], "show")         # kept
+        self.assertEqual(saved["list_fields"]["aspects"], "edit")       # invalid -> default
+        self.assertEqual(saved["list_fields"]["package"], "edit")       # missing -> default
 
 
 class ListingTests(Base):
@@ -143,6 +147,13 @@ class ListingTests(Base):
 
 
 class QueueTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.templates.save(dict(WALKMAN))  # a template with a category, unlike the patch starter
+
+    def walkman(self):
+        return self.templates.by_name("Sony Walkman")
+
     def queue_one(self, template=None, **values):
         svc = ListingService(FakeEbay(connected=False), self.settings, self.db)
         job = self.job(template, **values)
@@ -155,10 +166,10 @@ class QueueTests(Base):
         return queue, BatchLister(queue, ListingService(ebay or FakeEbay(), self.settings, self.db), self.templates)
 
     def test_queue_and_batch(self):
-        tpl = self.templates.first()
+        tpl = self.walkman()
         tpl.update(fulfillment_policy_id="F", payment_policy_id="P", return_policy_id="R", location_key="L")
         self.templates.save(tpl)
-        item_id = self.queue_one(template=self.templates.first())
+        item_id = self.queue_one(template=self.walkman())
         row = self.db.get(item_id)
         self.assertEqual(row["status"], "queued")
         data = ListingQueue.data(row)
@@ -177,7 +188,7 @@ class QueueTests(Base):
         self.assertFalse(os.path.exists(os.path.join(self.tmp, "queued", f"item_{item_id}")))
 
     def test_batch_uses_template_as_it_is_now(self):
-        tpl = self.templates.first()
+        tpl = self.walkman()
         item_id = self.queue_one(template=tpl)                       # queued before policies were set
         queue, lister = self.lister()
         self.assertIn("policy", lister.run(log=lambda m: None).failed[0])
@@ -189,8 +200,26 @@ class QueueTests(Base):
         self.assertEqual(ebay.offers[0]["listingPolicies"]["fulfillmentPolicyId"], "NEW")
         self.assertIsNone(self.db.get(item_id)["queue_error"])
 
+    def test_item_overrides_survive_the_queue(self):
+        tpl = self.walkman()
+        tpl.update(fulfillment_policy_id="F", payment_policy_id="P", return_policy_id="R", location_key="L")
+        self.templates.save(tpl)
+        svc = ListingService(FakeEbay(connected=False), self.settings, self.db)
+        job = self.job(self.walkman())
+        job.overrides = {"weight_oz": 3, "length": 11, "card_condition": "400010", "location_key": "NOT-ALLOWED"}
+        ListingQueue(self.db, os.path.join(self.tmp, "queued")).add(svc.record(job, queued=True), job)
+        tpl["height"] = 7                                            # template edits still apply...
+        self.templates.save(tpl)
+        ebay = FakeEbay()
+        queue, lister = self.lister(ebay)
+        self.assertEqual(len(lister.run(log=lambda m: None).listed), 1)
+        pkg = ebay.item["packageWeightAndSize"]
+        self.assertEqual((pkg["weight"]["value"], pkg["dimensions"]["length"], pkg["dimensions"]["height"]), (3, 11, 7))
+        self.assertEqual(ebay.item["conditionDescriptors"][0]["values"], ["400010"])
+        self.assertEqual(ebay.offers[0]["merchantLocationKey"], "L")  # ...and only allowed keys are overridden
+
     def test_deleted_template_falls_back_to_snapshot(self):
-        tpl = self.templates.create("Temp", base_id=self.templates.first()["id"])
+        tpl = self.templates.create("Temp", base_id=self.walkman()["id"])
         tpl.update(fulfillment_policy_id="F", payment_policy_id="P", return_policy_id="R", location_key="L")
         tpl = self.templates.save(tpl)
         item_id = self.queue_one(template=tpl)

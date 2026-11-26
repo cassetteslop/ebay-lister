@@ -1,3 +1,4 @@
-# Everything needed to build the packaged app (GitHub Actions installs these).
+# Everything needed to build the packaged app (GitHub Actions and packaging/macos/build_mac.sh install these).
 -r requirements.txt
 pyinstaller>=6.10,<7
+reportlab>=4.2,<6   # renders docs/USER_GUIDE.md to the PDF shipped with the app

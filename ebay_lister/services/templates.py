@@ -20,7 +20,14 @@ import shutil
 import threading
 import uuid
 
-from ebay_lister.config import STARTER_TEMPLATES, TEMPLATE_DEFAULTS, TEMPLATE_PHOTO_DIR
+from ebay_lister.config import (
+    DEFAULT_LIST_FIELDS,
+    LIST_FIELD_MODES,
+    LIST_FIELDS,
+    STARTER_TEMPLATES,
+    TEMPLATE_DEFAULTS,
+    TEMPLATE_PHOTO_DIR,
+)
 from ebay_lister.storage import load_json, save_json
 
 FORMAT_VERSION = 1
@@ -37,6 +44,9 @@ def normalize(template):
     t["name"] = str(t.get("name") or "").strip()
     t["variables"] = [{"name": v.get("name", ""), "default": v.get("default", ""),
                        "multiline": bool(v.get("multiline"))} for v in t.get("variables") or []]
+    modes = {m for _, m in LIST_FIELD_MODES}
+    fields = t.get("list_fields") if isinstance(t.get("list_fields"), dict) else {}
+    t["list_fields"] = {k: fields.get(k) if fields.get(k) in modes else DEFAULT_LIST_FIELDS[k] for k, _ in LIST_FIELDS}
     return t
 
 

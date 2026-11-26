@@ -46,7 +46,7 @@ class MenuBar:
             appmenu.add_separator()
             menubar.add_cascade(menu=appmenu)
             root.createcommand("tk::mac::ShowPreferences", lambda: self.show_tab(app.settings_tab))
-            root.createcommand("tk::mac::ShowHelp", self.open_readme)
+            root.createcommand("tk::mac::ShowHelp", self.open_guide)
 
         # ---- File
         file_menu = tk.Menu(menubar, tearoff=False)
@@ -88,6 +88,7 @@ class MenuBar:
         if self.mac:
             menubar.add_cascade(menu=tk.Menu(menubar, name="window", tearoff=False), label="Window")
         help_menu = tk.Menu(menubar, name="help", tearoff=False)
+        self._item(help_menu, "User Guide", None, self.open_guide)
         self._item(help_menu, "Helpful Links", None, lambda: self.show_tab(app.links_tab))
         self._item(help_menu, "Open Error Log", None, self.open_log)
         self._item(help_menu, "eBay API Documentation", None,
@@ -146,10 +147,11 @@ class MenuBar:
         else:
             messagebox.showinfo(APP_NAME, "No errors have been logged.")
 
-    def open_readme(self):
-        readme = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "README.md")
-        if os.path.exists(readme):
-            reveal(readme, select=False, open_file=True)
+    def open_guide(self):
+        from ebay_lister.config import guide_path
+        path = guide_path()
+        if path:
+            reveal(path, open_file=True)
         else:
             self.show_tab(self.app.links_tab)
 

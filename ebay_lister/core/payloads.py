@@ -7,7 +7,7 @@
 title, description, condition description and item specifics with ``{VARIABLES}`` filled in.
 """
 
-from ebay_lister.config import EBAY_MARKETPLACE, MAX_CONDITION_DESCRIPTION
+from ebay_lister.config import CARD_CONDITION_DESCRIPTOR, EBAY_MARKETPLACE, MAX_CONDITION_DESCRIPTION
 from ebay_lister.core.text import parse_aspects, parse_price, text_to_html
 
 
@@ -35,6 +35,8 @@ def build_inventory_item(tpl, rendered, image_urls):
     notes = (rendered.get("condition_description") or "").strip()
     if notes and tpl["condition"] != "NEW":  # eBay ignores condition descriptions on new items
         item["conditionDescription"] = notes[:MAX_CONDITION_DESCRIPTION]
+    if tpl.get("card_condition"):  # ungraded trading cards: eBay requires the card's condition
+        item["conditionDescriptors"] = [{"name": CARD_CONDITION_DESCRIPTOR, "values": [str(tpl["card_condition"])]}]
     return item
 
 

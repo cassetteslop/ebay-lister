@@ -22,11 +22,21 @@ import re
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
-from ebay_lister.config import APP_NAME, CONDITIONS, MAX_PHOTOS, MAX_TITLE_LEN, PHOTO_EXTS
+from ebay_lister.config import (
+    APP_NAME,
+    CARD_CONDITIONS,
+    CONDITIONS,
+    LIST_FIELD_MODES,
+    LIST_FIELDS,
+    MAX_PHOTOS,
+    MAX_TITLE_LEN,
+    PHOTO_EXTS,
+)
 from ebay_lister.core import variables as V
 from ebay_lister.core.matching import best_match
 from ebay_lister.core.validation import validate_template, validate_template_account, validate_template_content
 from ebay_lister.services.templates import TemplateError, normalize
+from ebay_lister.ui.aspects_dialog import suggest_aspects
 from ebay_lister.ui.tabs.base import BaseTab
 from ebay_lister.ui.theme import P, style_window
 from ebay_lister.ui.widgets import Choice, FormGrid, TextLabel, category_dialog, load_image, make_text, text_get, text_set
@@ -37,6 +47,11 @@ POLICY_KEYS = (("fulfillment", "fulfillment_policy_id", "fulfillment_policy_name
                ("return", "return_policy_id", "return_policy_name", "Return policy"),
                ("location", "location_key", "location_name", "Ship-from location"))
 NUMERIC = ("quantity", "weight_lb", "weight_oz", "length", "width", "height")
+LIST_FIELD_HINTS = {
+    "title": "Edit lets you reword one item's title after the variables are filled in.",
+    "aspects": "Edit also offers eBay's suggestions for the item.",
+    "package": "Weight and box size, for shipping.",
+}
 
 
 class VariableDialog:
@@ -232,6 +247,10 @@ class TemplatesTab(BaseTab):
             box.bind("<KeyRelease>", lambda e: self._text_changed())
             self.texts[key] = box
             add(label, frame, hint, sticky="we")
+        sf = ttk.Frame(b)
+        ttk.Button(sf, text="Suggest item specifics from eBay…", command=self.suggest_aspects).pack(side="left")
+        add("", sf, "eBay's item specifics for the category, with their allowed values. You can type a {VARIABLE} "
+                    "as a value.")
 
         # ---- eBay listing
         section("eBay listing")
@@ -244,6 +263,9 @@ class TemplatesTab(BaseTab):
         add("Category", cf, "eBay category ID. Suggest… searches eBay (needs your eBay keys in Settings).")
         self.condition = Choice(b, CONDITIONS, width=30)
         add("Condition", self.condition.cb, "Allowed conditions depend on the category.")
+        self.card_condition = Choice(b, CARD_CONDITIONS, width=30)
+        add("Card condition", self.card_condition.cb, "Trading cards only (e.g. Pokemon, category 183454): eBay "
+                                                      "requires it for ungraded cards. Use condition 'Used - very good'.")
         self.v["default_price"] = tk.StringVar()
         add("Default price", ttk.Entry(b, textvariable=self.v["default_price"], width=12),
             "Pre-filled on the List Item tab (optional).")
@@ -268,6 +290,17 @@ class TemplatesTab(BaseTab):
                                                                                                 padx=(2, 10))
         ttk.Label(df, text="inches").pack(side="left")
         add("Dimensions", df)
+
+        # ---- List Item form
+        section("List Item form", "what you see for each item on the List Item tab")
+        self.list_fields = {}
+        for key, label in LIST_FIELDS:
+            self.list_fields[key] = Choice(b, LIST_FIELD_MODES, width=10)
+            add(label, self.list_fields[key].cb, LIST_FIELD_HINTS.get(key, ""))
+        form.full(ttk.Label(b, text="Hidden: not on the form, the template's value is used.  Show: visible, can't be "
+                                    "changed.  Edit: starts with the template's value (variables filled in) and can "
+                                    "be changed for that one item.", foreground=P.muted, wraplength=760,
+                            justify="left"), sticky="w")
 
         # ---- standard photos
         section("Standard photos", "added to every listing from this template")
@@ -321,6 +354,9 @@ class TemplatesTab(BaseTab):
         for key, box in self.texts.items():
             text_set(box, t.get(key, ""))
         self.condition.set_value(t["condition"])
+        self.card_condition.set_value(t.get("card_condition") or "")
+        for key, choice in self.list_fields.items():
+            choice.set_value(t["list_fields"][key])
         self.best_offer.set(bool(t["best_offer"]))
         fps = list(t["fixed_photos"]) + [{"path": "", "position": ""}] * FIXED_PHOTO_SLOTS
         for slot, f in enumerate(self.fixed):
@@ -348,6 +384,8 @@ class TemplatesTab(BaseTab):
         for key, box in self.texts.items():
             t[key] = text_get(box)
         t["condition"] = self.condition.value() or t["condition"]
+        t["card_condition"] = self.card_condition.value() or ""
+        t["list_fields"] = {key: choice.value() or t["list_fields"][key] for key, choice in self.list_fields.items()}
         t["best_offer"] = self.best_offer.get()
         t["variables"] = copy.deepcopy(self.variables.variables)
         fixed = []
@@ -637,6 +675,16 @@ class TemplatesTab(BaseTab):
     def _set_category(self, node):
         self.v["category_id"].set(str(node["id"]))
         self.v["category_name"].set(node["path"])
+
+    def suggest_aspects(self):
+        box = self.texts["aspects"]
+
+        def applied(text):
+            text_set(box, text)
+            self._text_changed()
+
+        suggest_aspects(self, self.app, self.v["category_id"].get(), text_get(box), applied,
+                        note="Values can be {VARIABLES}, filled in per item on the List Item tab.")
 
     def choose_category(self):
         query = V.render(self.v["title"].get(), {})

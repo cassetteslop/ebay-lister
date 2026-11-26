@@ -10,6 +10,8 @@
 #   TARGET_ARCH        arm64 | x86_64 | universal2 (default: same as your Python)
 #   MAKE_DMG           1 (default) to also build dist/Ebay-Lister-<version>.dmg, 0 to skip
 #   BUNDLE_ID          bundle identifier         (default: com.ebaylister.app)
+#   VENV               build environment folder  (default: .venv-build in the project)
+#   SKIP_TESTS         1 to skip the unit tests  (default: 0)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -30,20 +32,23 @@ if tuple(int(x) for x in tk_version.split(".")[:2]) < (8, 6):
     sys.exit("Tk 8.6+ is required - install Python from python.org (it bundles a modern Tk).")
 PYCHECK
 
-echo "==> Creating build environment (.venv-build)"
-"$PY" -m venv .venv-build
+VENV="${VENV:-$ROOT/.venv-build}"
+echo "==> Build environment ($VENV)"
+[ -x "$VENV/bin/python" ] || "$PY" -m venv "$VENV"
 # shellcheck disable=SC1091
-source .venv-build/bin/activate
-python -m pip install --upgrade pip >/dev/null
-python -m pip install "pyinstaller>=6.0" pillow tkinterdnd2
+source "$VENV/bin/activate"
+python -m pip install -q --upgrade pip
+python -m pip install -q -r requirements-build.txt   # PyInstaller, Pillow, tkinterdnd2, reportlab
 
-echo "==> Running tests"
-python -m unittest discover -s tests -t . -q
+if [ "${SKIP_TESTS:-0}" != "1" ]; then
+  echo "==> Running tests"
+  python -m unittest discover -s tests -t . -q
+fi
 
 echo "==> Icon"
 bash packaging/macos/make_icns.sh
 
-echo "==> Building app"
+echo "==> Building app (also renders the user guide PDF)"
 VERSION="$(python -c 'import ebay_lister; print(ebay_lister.__version__)')"
 pyinstaller --noconfirm --clean --distpath dist --workpath build packaging/macos/EbayLister.spec
 
@@ -57,6 +62,7 @@ if [ "${MAKE_DMG:-1}" = "1" ]; then
   DMG="dist/Ebay-Lister-$VERSION.dmg"
   STAGE="$(mktemp -d)"
   cp -R "$APP" "$STAGE/"
+  cp "build/guide/Ebay Lister User Guide.pdf" "$STAGE/"   # the guide, next to the app
   ln -s /Applications "$STAGE/Applications"      # drag-to-install shortcut
   hdiutil create -volname "Ebay Lister" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
   rm -rf "$STAGE"

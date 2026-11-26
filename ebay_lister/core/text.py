@@ -24,6 +24,37 @@ def parse_aspects(text):
     return out
 
 
+def aspect_lines(text):
+    """Item specifics text -> {'Name': 'raw value text'} (values unparsed, so {VARIABLES} survive)."""
+    out = {}
+    for line in (text or "").splitlines():
+        if ":" in line:
+            k, v = line.split(":", 1)
+            if k.strip():
+                out[k.strip()] = v.strip()
+    return out
+
+
+def merge_aspects(text, changes):
+    """Apply ``changes`` ({'Name': 'value'}) to item specifics text: replace a line with the same name
+    (case-insensitive) in place, append new names at the end, and remove a line whose new value is ''.
+    Other lines, including comments and blank lines, are kept as they are."""
+    pending = {k.strip().lower(): (k.strip(), (v or "").strip()) for k, v in changes.items() if k.strip()}
+    lines = []
+    for line in (text or "").splitlines():
+        key = line.split(":", 1)[0].strip().lower() if ":" in line else None
+        if key in pending:
+            name, value = pending.pop(key)
+            if value:
+                lines.append(f"{line.split(':', 1)[0].strip()}: {value}")
+            continue
+        lines.append(line)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    lines += [f"{name}: {value}" for name, value in pending.values() if value]
+    return "\n".join(lines)
+
+
 def make_sku(hint=""):
     """Unique SKU from a hint (e.g. the title) and the current time, e.g. 'SONYWALKMAN-261125203015'."""
     clean = re.sub(r"[^A-Za-z0-9]+", "", hint or "").upper()[:16] or "ITEM"

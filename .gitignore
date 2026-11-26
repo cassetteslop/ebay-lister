@@ -30,7 +30,8 @@ MANIFEST
 #   Usually these files are written by a python script from a template
 #   before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
-*.spec
+# (the .spec files in packaging/ are hand-written and must stay tracked)
+*.spec.bak
 
 # Installer logs
 pip-log.txt
@@ -223,3 +224,9 @@ __marimo__/
 .streamlit/secrets.toml
 
 .DS_Store
+
+# Ebay Lister build outputs
+.venv-build/
+selftest.txt
+packaging/windows/ebay_lister.ico
+packaging/macos/EbayLister.icns

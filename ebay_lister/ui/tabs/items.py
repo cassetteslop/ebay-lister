@@ -1,12 +1,13 @@
 """Items Database tab: every item listed or queued through the app, with sales tracking.
 
-Layout:
+Layout (the whole tab scrolls when the window is too small for it):
 
 * toolbar - search, Sync with eBay, List all queued / List selected, Export CSV, running totals
 * **Active listings** - unsold items that are live on eBay
 * **Queued** - items saved with "Add to queue", waiting to be bulk-listed (select several with
   ⌘/Ctrl/Shift-click and use *List selected*, or *List all queued*)
 * **Unpublished, sold & ended** - everything else
+* **Activity log** - the same log as the List Item tab, so you can follow a bulk listing
 * **Selected item** - link to the eBay listing and the sale fields (sold, sold on, date, price,
   your cost, fees, profit, notes); *Remove from database* deletes only the local record.
 """
@@ -103,13 +104,14 @@ class ItemsTab(BaseTab):
                  "status": "status", "sold": "sold", "sold_price": "sold_price", "profit": "profit"}
 
     def __init__(self, master, app):
-        super().__init__(master, app, scroll=False, padding=10)
+        super().__init__(master, app)
         self.current = None
         self._thumb = None
         self._sort = ("listed", True)
 
         # ---- toolbar
-        bar = ttk.Frame(self)
+        b = self.body
+        bar = ttk.Frame(b)
         bar.pack(fill="x")
         ttk.Label(bar, text="Search").pack(side="left")
         self.q = tk.StringVar()
@@ -126,7 +128,7 @@ class ItemsTab(BaseTab):
         self.totals.pack(side="right")
 
         # ---- sections, in a resizable split
-        panes = ttk.PanedWindow(self, orient="vertical")
+        panes = ttk.PanedWindow(b, orient="vertical")
         panes.pack(fill="both", expand=True, pady=(6, 0))
         self.active_list = ItemList(panes, "Active listings", 6, self._on_select, self._open_item, self.sort_by)
         self.queued_list = ItemList(panes, "Queued - ready to bulk list", 5, self._on_select, self._open_item,
@@ -136,11 +138,15 @@ class ItemsTab(BaseTab):
         for lst in (self.active_list, self.queued_list, self.other_list):
             panes.add(lst, weight=1)
         self.lists = (self.active_list, self.queued_list, self.other_list)
-        ttk.Label(self, text="Tip: double-click the eBay cell to open a listing. Click a column heading to sort.",
+        ttk.Label(b, text="Tip: double-click the eBay cell to open a listing. Click a column heading to sort.",
                   foreground=P.muted).pack(anchor="w")
 
+        # ---- activity log (shared with the List Item tab): progress of bulk listing and syncing
+        ttk.Label(b, text="Activity log", style="Section.TLabel").pack(anchor="w", pady=(10, 2))
+        self.make_log(b, height=7).pack(fill="x")
+
         # ---- selected item
-        d = ttk.LabelFrame(self, text="  Selected item  ", padding=10)
+        d = ttk.LabelFrame(b, text="  Selected item  ", padding=10)
         d.pack(fill="x", pady=(8, 0))
         self.thumb = tk.Label(d, bg=P.preview_bg, width=16, height=8, text="")
         self.thumb.grid(row=0, column=0, rowspan=6, sticky="nw", padx=(0, 14))

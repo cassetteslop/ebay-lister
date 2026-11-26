@@ -160,7 +160,10 @@ class EbayClient:
         for a in j.get("aspects", []):
             c = a.get("aspectConstraint") or {}
             out.append({"name": a["localizedAspectName"], "required": bool(c.get("aspectRequired")),
-                        "recommended": c.get("aspectUsage") == "RECOMMENDED"})
+                        "recommended": c.get("aspectUsage") == "RECOMMENDED",
+                        "free_text": c.get("aspectMode", "FREE_TEXT") == "FREE_TEXT",   # else pick from values
+                        "multiple": c.get("itemToAspectCardinality") == "MULTI",
+                        "values": [v["localizedValue"] for v in a.get("aspectValues", []) if v.get("localizedValue")]})
         return out
 
     # ---- listing

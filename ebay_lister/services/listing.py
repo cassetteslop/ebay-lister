@@ -17,6 +17,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from ebay_lister.config import OVERRIDABLE
 from ebay_lister.core.payloads import build_inventory_item, build_offer
 from ebay_lister.core.text import parse_price
 
@@ -30,10 +31,25 @@ class ListingJob:
     photos: List[str]
     sku: str
     values: Dict[str, str] = field(default_factory=dict)   # the variable values (kept for the record)
+    # template settings changed for this one item on the List Item form (config.OVERRIDABLE keys),
+    # e.g. {"weight_oz": 3, "length": 9}; applied on top of the template
+    overrides: Dict[str, object] = field(default_factory=dict)
 
     @property
     def title(self):
         return self.rendered.get("title", "")
+
+    @property
+    def settings(self):
+        """The template with this item's overrides applied: what's actually sent to eBay."""
+        return apply_overrides(self.template, self.overrides)
+
+
+def apply_overrides(template, overrides):
+    """``template`` with the allowed per-item ``overrides`` applied (a new dict)."""
+    out = dict(template or {})
+    out.update({k: v for k, v in (overrides or {}).items() if k in OVERRIDABLE})
+    return out
 
 
 @dataclass
@@ -69,7 +85,7 @@ class ListingService:
             return ListingResult(ok=False, message=str(exc))
 
     def _list(self, job, log):
-        tpl = job.template
+        tpl = job.settings
         image_urls = []
         for i, path in enumerate(job.photos, 1):
             log(f"[eBay] Uploading photo {i}/{len(job.photos)}: {os.path.basename(path)}")
