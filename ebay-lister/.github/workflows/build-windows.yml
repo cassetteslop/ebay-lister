@@ -1,0 +1,94 @@
+# Builds the Windows app (dist/Ebay Lister/Ebay Lister.exe) with PyInstaller.
+#
+# * Every push to main, every pull request and manual runs ("Run workflow" on the Actions tab):
+#   the app folder is uploaded as the build artifact "Ebay-Lister-windows" - download it from the
+#   run's Summary page, unzip, and run "Ebay Lister.exe".
+# * Pushing a tag like v1.0.0 also creates a GitHub Release with Ebay-Lister-<version>-windows.zip.
+name: Build Windows app
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # only used to attach the zip to a Release when a v* tag is pushed
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-build.txt
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-build.txt
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -t . -v
+
+      - name: Self-test from source
+        run: python run.py --self-test
+
+      - name: App icon (optional packaging/windows/icon.png)
+        run: python packaging/windows/make_ico.py
+
+      - name: Build with PyInstaller
+        run: python -m PyInstaller --noconfirm --clean --distpath dist --workpath build packaging/windows/ebay_lister.spec
+
+      - name: Self-test the built exe
+        run: |
+          $exe = "dist/Ebay Lister/Ebay Lister.exe"
+          if (-not (Test-Path $exe)) { throw "Build output not found: $exe" }
+          # a windowed exe returns immediately when started from a shell, so wait for it explicitly
+          $report = Join-Path $PWD "selftest.txt"
+          $p = Start-Process -FilePath $exe -ArgumentList "--self-test", "`"$report`"" -Wait -PassThru
+          if (-not (Test-Path $report)) { throw "The exe didn't write a self-test report." }
+          Get-Content $report
+          if ($p.ExitCode -ne 0 -or -not (Select-String -Path $report -Pattern "SELF-TEST OK" -Quiet)) {
+            throw "The packaged app failed its self-test (see the report above)."
+          }
+
+      - name: Name the zip
+        id: meta
+        run: |
+          $version = python -c "import ebay_lister; print(ebay_lister.__version__)"
+          "zip=Ebay-Lister-$version-windows.zip" >> $env:GITHUB_OUTPUT
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ebay-Lister-windows
+          path: dist/Ebay Lister/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Zip for release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: Compress-Archive -Path "dist/Ebay Lister" -DestinationPath "dist/${{ steps.meta.outputs.zip }}"
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ steps.meta.outputs.zip }}
+          generate_release_notes: true

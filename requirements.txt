@@ -1,0 +1,3 @@
+# Ebay Lister only needs Python 3.9+ with tkinter. These are optional but recommended:
+pillow>=10       # JPEG thumbnails and large photo previews
+tkinterdnd2>=0.4 # drag & drop photos from Explorer / Finder

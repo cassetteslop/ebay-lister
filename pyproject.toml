@@ -1,0 +1,21 @@
+[project]
+name = "ebay-lister"
+version = "1.0.0"
+description = "Desktop app for creating eBay listings from reusable templates, queueing them and bulk-listing."
+readme = "README.md"
+requires-python = ">=3.9"
+optional-dependencies = { ui = ["pillow>=10", "tkinterdnd2>=0.4"], build = ["pyinstaller>=6.10,<7"] }
+
+[project.scripts]
+ebay-lister = "ebay_lister.ui.app:main"
+
+[tool.ruff]
+line-length = 135
+extend-exclude = ["tests/fake_tk"]   # deliberately loose stand-in for tkinter
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E741"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ebay_lister"]
